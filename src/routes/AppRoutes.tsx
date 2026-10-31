@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { AppLayout } from '../components/layout/AppLayout';
 import { Login } from '../pages/auth/Login';
 import { Register } from '../pages/auth/Register';
+import { ForgotPassword } from '../pages/auth/ForgotPassword';
 import { Overview } from '../pages/dashboard/Overview';
 import { CustomerList } from '../pages/customers/CustomerList';
 import { ProductList } from '../pages/products/ProductList';
@@ -50,6 +51,7 @@ export const AppRoutes: React.FC = () => {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
 
       {/* Authenticated Application routes */}
       <Route

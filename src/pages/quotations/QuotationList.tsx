@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dbService } from '../../services/db';
-import { Quotation, Customer, Product, SubscriptionPlan, TaxRule, DiscountRule } from '../../types';
+import { Quotation, Customer, Product, SubscriptionPlan, TaxRule, DiscountRule, QuotationTemplate } from '../../types';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -11,24 +11,27 @@ import { Modal } from '../../components/ui/Modal';
 import { formatCurrency, toMinorUnits } from '../../utils/money';
 import { calculateTaxes } from '../../utils/tax';
 import { calculateDiscounts } from '../../utils/discount';
-import { FileText, Plus, ArrowRight, Printer, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { FileText, Plus, ArrowRight, Printer, Sparkles, AlertCircle, CheckCircle2, BookmarkCheck, Calendar, Layers } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const QuotationList: React.FC = () => {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [templates, setTemplates] = useState<QuotationTemplate[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [taxes, setTaxes] = useState<TaxRule[]>([]);
   const [discounts, setDiscounts] = useState<DiscountRule[]>([]);
 
+  const [activeTab, setActiveTab] = useState<'quotations' | 'templates'>('quotations');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [previewQuotation, setPreviewQuotation] = useState<Quotation | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   // New quotation form state
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState('');
@@ -39,8 +42,9 @@ export const QuotationList: React.FC = () => {
   const [validityDays, setValidityDays] = useState(30);
 
   const fetchData = async () => {
-    const [qList, cList, pList, plList, tList, dList] = await Promise.all([
+    const [qList, tmplList, cList, pList, plList, tList, dList] = await Promise.all([
       dbService.getQuotations(),
+      dbService.getQuotationTemplates(),
       dbService.getCustomers(),
       dbService.getProducts(),
       dbService.getPlans(),
@@ -48,6 +52,7 @@ export const QuotationList: React.FC = () => {
       dbService.getDiscountRules(),
     ]);
     setQuotations(qList);
+    setTemplates(tmplList);
     setCustomers(cList);
     setProducts(pList);
     setPlans(plList);
@@ -62,6 +67,31 @@ export const QuotationList: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (!templateId) return;
+
+    const tmpl = templates.find((t) => t.id === templateId);
+    if (!tmpl) return;
+
+    setValidityDays(tmpl.defaultValidityDays || 30);
+    setPaymentTerms(tmpl.defaultTerms || 'Net 30 days');
+    setNotes(tmpl.defaultNotes || 'Thank you for choosing Brightloop Software.');
+
+    if (tmpl.lineItems && tmpl.lineItems.length > 0) {
+      const line = tmpl.lineItems[0];
+      if (line.productId) setSelectedProductId(line.productId);
+      if (line.variantId) setSelectedVariantId(line.variantId);
+      if (line.planId) setSelectedPlanId(line.planId);
+      if (line.quantity) setQuantity(line.quantity);
+    }
+  };
+
+  const handleUseTemplate = (template: QuotationTemplate) => {
+    handleSelectTemplate(template.id);
+    setIsCreateModalOpen(true);
+  };
 
   const handleCreateQuotation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,6 +188,32 @@ export const QuotationList: React.FC = () => {
         </Button>
       </div>
 
+      {/* View Toggle Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#1E293B] pb-1">
+        <button
+          onClick={() => setActiveTab('quotations')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'quotations'
+              ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <FileText className="h-3.5 w-3.5" />
+          Active Quotations ({quotations.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('templates')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'templates'
+              ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <BookmarkCheck className="h-3.5 w-3.5" />
+          Preconfigured Templates ({templates.length})
+        </button>
+      </div>
+
       {actionSuccess && (
         <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-300 text-sm flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -170,9 +226,53 @@ export const QuotationList: React.FC = () => {
         </div>
       )}
 
-      {/* Quotations List */}
-      <div className="grid grid-cols-1 gap-4">
-        {quotations.map((q) => {
+      {/* Templates Tab View */}
+      {activeTab === 'templates' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in">
+          {templates.map((tmpl) => (
+            <Card key={tmpl.id} className="p-5 border-[#1E293B] bg-[#0C101A] hover:border-blue-500/40 transition-all flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BookmarkCheck className="h-4 w-4 text-blue-400" />
+                    <span className="font-bold text-white text-base">{tmpl.name}</span>
+                  </div>
+                  <Badge variant="info" size="sm">
+                    {tmpl.defaultValidityDays} Days Validity
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-400">{tmpl.description}</p>
+                <div className="p-3 bg-[#07090E] rounded-lg border border-[#192233] space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-300">
+                    <span className="text-slate-400">Default Terms:</span>
+                    <span className="font-mono">{tmpl.defaultTerms}</span>
+                  </div>
+                  {tmpl.lineItems?.map((li, idx) => (
+                    <div key={idx} className="flex justify-between text-blue-400 font-mono text-[11px] pt-1 border-t border-[#192233]">
+                      <span>{li.description}</span>
+                      <span>{formatCurrency(li.unitPrice)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="pt-4 mt-3 border-t border-[#192233] flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={() => handleUseTemplate(tmpl)}
+                  className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Use This Template
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Quotations List Tab View */}
+      {activeTab === 'quotations' && (
+        <div className="grid grid-cols-1 gap-4 animate-in fade-in">
+          {quotations.map((q) => {
           const isExpired = new Date(q.expiryDate).getTime() < Date.now();
           const canConvert = q.status === 'confirmed' && !isExpired;
 
@@ -234,16 +334,39 @@ export const QuotationList: React.FC = () => {
           );
         })}
       </div>
+      )}
 
       {/* Create Quotation Modal */}
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         title="Create New Quotation"
-        description="Select customer, software products, add-on variants, and apply configured tax rules."
+        description="Select customer, software products, add-on variants, or start from a pre-configured template."
         maxWidth="2xl"
       >
         <form onSubmit={handleCreateQuotation} className="space-y-4">
+          {/* Template Pre-fill Selector */}
+          <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">
+                <BookmarkCheck className="h-3.5 w-3.5" /> Fast-Start: Choose Quotation Template (Optional)
+              </span>
+              <span className="text-[10px] text-slate-400">Auto-populates items, Odoo variants & terms</span>
+            </div>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => handleSelectTemplate(e.target.value)}
+              className="w-full text-xs bg-[#0F172A] border border-[#1E293B] rounded-md px-2.5 py-1.5 text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="">-- Start from scratch (Empty Lines) --</option>
+              {templates.map((tmpl) => (
+                <option key={tmpl.id} value={tmpl.id}>
+                  {tmpl.name} ({tmpl.defaultValidityDays} days validity)
+                </option>
+              ))}
+            </select>
+          </div>
+
           <Select
             label="Customer"
             value={selectedCustomerId}

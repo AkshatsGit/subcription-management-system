@@ -94,15 +94,25 @@ export const Login: React.FC = () => {
                 className="bg-[#070A11] border-[#1E293B] text-white placeholder:text-slate-600 focus-visible:ring-blue-500 text-xs h-9"
               />
 
-              <Input
-                label="Password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                required
-                className="bg-[#070A11] border-[#1E293B] text-white placeholder:text-slate-600 focus-visible:ring-blue-500 text-xs h-9"
-              />
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className="block text-[11px] font-mono font-medium text-slate-300">
+                    Password
+                  </label>
+                  <Link to="/forgot-password" className="text-[11px] text-blue-400 hover:underline">
+                    Forgot password?
+                  </Link>
+                </div>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  required
+                  className="flex h-8 w-full rounded-md border border-[#1E293B] bg-[#070A11] px-3 py-1.5 text-xs text-white placeholder:text-slate-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 font-sans"
+                />
+              </div>
 
               {/* Quick Persona Fill */}
               <div className="pt-1">

@@ -556,6 +556,34 @@ class DatabaseService {
     return invoices.find((inv) => inv.id === id) || null;
   }
 
+  async updateInvoiceStatus(id: string, status: Invoice['status']): Promise<Invoice> {
+    const invoices = await this.getInvoices();
+    const invoice = invoices.find((inv) => inv.id === id);
+    if (!invoice) throw new Error('Invoice not found');
+
+    const updatedInvoice: Invoice = {
+      ...invoice,
+      status,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await withTimeout(
+        setDoc(
+          doc(db, 'invoices', id),
+          { status, updatedAt: serverTimestamp() },
+          { merge: true }
+        )
+      );
+    } catch {
+      // Fallback
+    }
+
+    const updated = invoices.map((inv) => (inv.id === id ? updatedInvoice : inv));
+    setLocal(STORAGE_KEYS.INVOICES, updated);
+    return updatedInvoice;
+  }
+
   /**
    * Automated Recurring Billing Engine (Requirement REQ-BILL-01, REQ-BILL-02)
    * Evaluates active subscriptions whose nextBillingDate is due.

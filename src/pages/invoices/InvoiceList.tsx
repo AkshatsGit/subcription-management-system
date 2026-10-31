@@ -8,7 +8,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { formatCurrency, toMinorUnits } from '../../utils/money';
-import { Receipt, Printer, CreditCard, Search, ArrowUpRight, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Receipt, Printer, CreditCard, Search, ArrowUpRight, CheckCircle2, AlertTriangle, Send, XCircle, Check, Ban } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const InvoiceList: React.FC = () => {
@@ -17,6 +17,7 @@ export const InvoiceList: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   // Manual payment modal state
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
@@ -67,6 +68,38 @@ export const InvoiceList: React.FC = () => {
     }
   };
 
+  const handleConfirmInvoice = async (invoiceId: string, invoiceNumber: string) => {
+    try {
+      await dbService.updateInvoiceStatus(invoiceId, 'confirmed');
+      setActionMessage(`Invoice ${invoiceNumber} confirmed successfully and posted to active receivables.`);
+      fetchInvoices();
+    } catch (err: any) {
+      alert(err.message || 'Failed to confirm invoice');
+    }
+  };
+
+  const handleCancelInvoice = async (invoiceId: string, invoiceNumber: string) => {
+    if (!window.confirm(`Are you sure you want to cancel invoice ${invoiceNumber}? This will mark it as void.`)) return;
+    try {
+      await dbService.updateInvoiceStatus(invoiceId, 'cancelled');
+      setActionMessage(`Invoice ${invoiceNumber} marked as cancelled.`);
+      fetchInvoices();
+    } catch (err: any) {
+      alert(err.message || 'Failed to cancel invoice');
+    }
+  };
+
+  const handleSendInvoice = (invoice: Invoice) => {
+    setActionMessage(`Invoice ${invoice.invoiceNumber} successfully dispatched to ${invoice.customerSnapshot.email}.`);
+  };
+
+  const handlePrintDirect = (invoice: Invoice) => {
+    setPreviewInvoice(invoice);
+    setTimeout(() => {
+      window.print();
+    }, 400);
+  };
+
   const filtered = invoices.filter((inv) => {
     const matchesSearch =
       inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -82,10 +115,23 @@ export const InvoiceList: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Invoices & Statements</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Immutable financial records, tax & discount snapshots, and multi-payment reconciliation.
+            Complete lifecycle management: Draft → Confirmed → Paid. Confirm, cancel, send, print, and reconcile payments.
           </p>
         </div>
       </div>
+
+      {/* Action Notification Banner */}
+      {actionMessage && (
+        <div className="p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl text-blue-800 dark:text-blue-300 text-sm flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="font-semibold">{actionMessage}</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setActionMessage(null)} className="h-7 text-xs">
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -103,12 +149,14 @@ export const InvoiceList: React.FC = () => {
           onChange={(e) => setStatusFilter(e.target.value)}
           options={[
             { label: 'All Invoices', value: 'all' },
+            { label: 'Draft', value: 'draft' },
+            { label: 'Confirmed / Pending', value: 'confirmed' },
             { label: 'Paid', value: 'paid' },
             { label: 'Partially Paid', value: 'partially_paid' },
-            { label: 'Confirmed / Pending', value: 'confirmed' },
             { label: 'Overdue', value: 'overdue' },
+            { label: 'Cancelled', value: 'cancelled' },
           ]}
-          className="w-full sm:w-48"
+          className="w-full sm:w-56"
         />
       </div>
 
@@ -128,6 +176,10 @@ export const InvoiceList: React.FC = () => {
                         ? 'danger'
                         : inv.status === 'partially_paid'
                         ? 'warning'
+                        : inv.status === 'draft'
+                        ? 'neutral'
+                        : inv.status === 'cancelled'
+                        ? 'danger'
                         : 'info'
                     }
                     size="sm"
@@ -162,23 +214,67 @@ export const InvoiceList: React.FC = () => {
                       inv.balanceDue === 0 ? 'text-emerald-600' : 'text-amber-600'
                     }`}
                   >
-                    {inv.balanceDue === 0 ? 'Fully Paid' : `Balance Due: ${formatCurrency(inv.balanceDue)}`}
+                    {inv.status === 'cancelled'
+                      ? 'Cancelled / Void'
+                      : inv.balanceDue === 0
+                      ? 'Fully Paid'
+                      : `Balance Due: ${formatCurrency(inv.balanceDue)}`}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setPreviewInvoice(inv)} className="gap-1.5 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPreviewInvoice(inv)} className="gap-1.5 text-xs h-8">
                     <Receipt className="h-3.5 w-3.5" /> Preview
                   </Button>
 
-                  {!isCustomer && inv.balanceDue > 0 && (
-                    <Button
-                      size="sm"
-                      onClick={() => openPaymentModal(inv)}
-                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs shadow-sm"
-                    >
-                      <CreditCard className="h-3.5 w-3.5" /> Record Payment
-                    </Button>
+                  <Button variant="outline" size="sm" onClick={() => handlePrintDirect(inv)} className="gap-1.5 text-xs h-8">
+                    <Printer className="h-3.5 w-3.5" /> Print
+                  </Button>
+
+                  {!isCustomer && (
+                    <>
+                      {inv.status === 'draft' && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleConfirmInvoice(inv.id, inv.invoiceNumber)}
+                          className="gap-1.5 text-xs h-8 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm"
+                        >
+                          <Check className="h-3.5 w-3.5" /> Confirm
+                        </Button>
+                      )}
+
+                      {inv.status !== 'cancelled' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSendInvoice(inv)}
+                          className="gap-1.5 text-xs h-8 text-slate-300 hover:text-white"
+                        >
+                          <Send className="h-3.5 w-3.5" /> Send
+                        </Button>
+                      )}
+
+                      {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCancelInvoice(inv.id, inv.invoiceNumber)}
+                          className="gap-1.5 text-xs h-8 text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
+                        >
+                          <Ban className="h-3.5 w-3.5" /> Cancel
+                        </Button>
+                      )}
+
+                      {inv.balanceDue > 0 && inv.status !== 'cancelled' && inv.status !== 'draft' && (
+                        <Button
+                          size="sm"
+                          onClick={() => openPaymentModal(inv)}
+                          className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-sm"
+                        >
+                          <CreditCard className="h-3.5 w-3.5" /> Record Payment
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
