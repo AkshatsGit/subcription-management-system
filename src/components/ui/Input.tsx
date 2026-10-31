@@ -13,9 +13,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
     return (
-      <div className="w-full space-y-1.5">
+      <div className="w-full space-y-1">
         {label && (
-          <label htmlFor={inputId} className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <label htmlFor={inputId} className="block text-[11px] font-mono font-medium text-slate-300">
             {label}
           </label>
         )}
@@ -25,18 +25,17 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           className={twMerge(
             clsx(
-              'flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-all',
-              error && 'border-destructive focus-visible:ring-destructive',
+              'flex h-8 w-full rounded-md border border-[#1E293B] bg-[#070A11] px-3 py-1.5 text-xs text-white placeholder:text-slate-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 transition-all font-sans',
+              error && 'border-rose-500 focus-visible:ring-rose-500',
               className
             )
           )}
           {...props}
         />
-        {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
-        {error && <p className="text-xs font-medium text-destructive">{error}</p>}
+        {hint && !error && <p className="text-[10px] text-slate-400 font-mono">{hint}</p>}
+        {error && <p className="text-[10px] font-medium text-rose-400 font-mono">{error}</p>}
       </div>
     );
   }
 );
 Input.displayName = 'Input';
-

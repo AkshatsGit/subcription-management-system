@@ -23,32 +23,34 @@ export const StatsCard: React.FC<StatsCardProps> = ({
   color = 'primary',
 }) => {
   const colorStyles = {
-    primary: 'bg-primary/10 text-primary border-primary/20',
-    emerald: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-    amber: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-    rose: 'bg-rose-500/10 text-rose-600 border-rose-500/20',
-    sky: 'bg-sky-500/10 text-sky-600 border-sky-500/20',
+    primary: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    amber: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    rose: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    sky: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
   };
 
   return (
-    <Card className="p-5 flex flex-col justify-between hover:border-primary/40 transition-all shadow-sm">
+    <Card className="p-4 flex flex-col justify-between hover:border-blue-500/30 transition-all bg-[#0B0F19] border-[#192233]">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
-          <h4 className="text-2xl font-bold tracking-tight text-foreground mt-2">{value}</h4>
+          <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">{title}</p>
+          <h4 className="text-xl md:text-2xl font-bold font-mono tracking-tight text-white mt-1 tabular-nums">
+            {value}
+          </h4>
         </div>
-        <div className={`p-2.5 rounded-xl border ${colorStyles[color]}`}>
-          <Icon className="h-5 w-5" />
+        <div className={`p-2 rounded-md border ${colorStyles[color]}`}>
+          <Icon className="h-4 w-4" />
         </div>
       </div>
 
       {(subtitle || trend) && (
-        <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground pt-3 border-t border-border/50">
-          {subtitle && <span>{subtitle}</span>}
+        <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400 pt-2.5 border-t border-[#192233]">
+          {subtitle && <span className="truncate mr-2">{subtitle}</span>}
           {trend && (
             <span
-              className={`font-semibold flex items-center gap-1 ${
-                trend.isPositive ? 'text-emerald-600' : 'text-rose-600'
+              className={`font-mono font-semibold shrink-0 flex items-center gap-0.5 ${
+                trend.isPositive ? 'text-emerald-400' : 'text-rose-400'
               }`}
             >
               {trend.isPositive ? '↑' : '↓'} {trend.value}
@@ -59,4 +61,3 @@ export const StatsCard: React.FC<StatsCardProps> = ({
     </Card>
   );
 };
-
