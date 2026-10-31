@@ -1,0 +1,148 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      // Support custom claims first, with fallback to users collection
+      return request.auth.token.role != null ? request.auth.token.role : 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? getUserData().role : 'customer');
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (request.auth.token.role == 'admin' || getUserRole() == 'admin');
+    }
+
+    function isStaff() {
+      return isAuthenticated() && (request.auth.token.role == 'staff' || getUserRole() == 'staff' || isAdmin());
+    }
+
+    function isCustomer() {
+      return isAuthenticated() && (request.auth.token.role == 'customer' || getUserRole() == 'customer');
+    }
+
+    function isCustomerOwner(customerId) {
+      return isAuthenticated() && (
+        request.auth.uid == customerId || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().customerId == customerId)
+      );
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isStaff());
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow update: if isAuthenticated() && (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'customerId'])) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Customers collection
+    match /customers/{customerId} {
+      allow read: if isStaff() || isCustomerOwner(customerId);
+      allow create: if isStaff();
+      allow update: if isStaff() || (isCustomerOwner(customerId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalSpent', 'outstandingBalance', 'status']));
+      allow delete: if isAdmin();
+    }
+
+    // Products collection (readable by staff, active products viewable by customers)
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Subscription Plans collection
+    match /plans/{planId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Quotation Templates
+    match /quotationTemplates/{templateId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // Quotations
+    match /quotations/{quotationId} {
+      allow read: if isStaff() || (isCustomer() && resource.data.customerId == getUserData().customerId);
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // Subscriptions
+    match /subscriptions/{subscriptionId} {
+      allow read: if isStaff() || (isCustomer() && resource.data.customerId == getUserData().customerId);
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // Invoices - Crucial financial document! Customers can never alter totals/status directly.
+    match /invoices/{invoiceId} {
+      allow read: if isStaff() || (isCustomer() && resource.data.customerId == getUserData().customerId);
+      allow create, update, delete: if isStaff();
+    }
+
+    // Payments
+    match /payments/{paymentId} {
+      allow read: if isStaff() || (isCustomer() && resource.data.customerId == getUserData().customerId);
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // Tax Rules
+    match /taxRules/{taxId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Discount Rules
+    match /discountRules/{discountId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Discount Usages
+    match /discountUsages/{usageId} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    // Billing Jobs & Billing Events (internal execution logs)
+    match /billingJobs/{jobId} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+    match /billingEvents/{eventId} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    // Dashboard Metrics (precomputed aggregate)
+    match /dashboardMetrics/{metricId} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    // Audit Logs (append-only)
+    match /auditLogs/{logId} {
+      allow read: if isStaff();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable audit log
+    }
+
+    // Business Settings
+    match /businessSettings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}
