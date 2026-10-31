@@ -195,7 +195,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Create linked customer document
       const customerDocRef = doc(db, 'customers', uid);
-      await setDoc(customerDocRef, {
+      const newCustomerRecord = {
         id: uid,
         companyName: companyName || `${displayName}'s Org`,
         contactName: displayName,
@@ -209,12 +209,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           country: 'India',
         },
         userId: uid,
-        status: 'active',
+        status: 'active' as const,
         totalSpent: 0,
         outstandingBalance: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      try {
+        await setDoc(customerDocRef, {
+          ...newCustomerRecord,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch {
+        // Firestore write fallback
+      }
+
+      // Mirror into local storage so customer is immediately visible in all subscription and quotation selectors
+      try {
+        const raw = localStorage.getItem('brightloop_customers');
+        const list = raw ? JSON.parse(raw) : [];
+        if (!list.some((c: any) => c.id === uid)) {
+          localStorage.setItem('brightloop_customers', JSON.stringify([newCustomerRecord, ...list]));
+        }
+      } catch {
+        // Storage fallback
+      }
 
       // Create user record with customer role
       const profile: UserProfile = {
@@ -243,6 +264,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ) {
         // Fallback for local demo mode
         const mockUid = `demo_cust_${Date.now()}`;
+        const newCustomerRecord = {
+          id: mockUid,
+          companyName: companyName || `${displayName}'s Org`,
+          contactName: displayName,
+          email,
+          phone: '',
+          billingAddress: {
+            street: '123 Business Avenue',
+            city: 'Mumbai',
+            state: 'Maharashtra',
+            postalCode: '400001',
+            country: 'India',
+          },
+          userId: mockUid,
+          status: 'active' as const,
+          totalSpent: 0,
+          outstandingBalance: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        try {
+          const raw = localStorage.getItem('brightloop_customers');
+          const list = raw ? JSON.parse(raw) : [];
+          localStorage.setItem('brightloop_customers', JSON.stringify([newCustomerRecord, ...list]));
+        } catch {
+          // Ignore
+        }
+
         const mockProfile: UserProfile = {
           uid: mockUid,
           email,

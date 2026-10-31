@@ -11,7 +11,7 @@ export const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [email, setEmail] = useState('admin@brightloop.com');
-  const [password, setPassword] = useState('Admin@Brightloop2026!');
+  const [password, setPassword] = useState('Admin@123');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFirebaseGuide, setShowFirebaseGuide] = useState(false);
@@ -22,7 +22,11 @@ export const Login: React.FC = () => {
     setError(null);
     try {
       await login(email, password);
-      navigate('/dashboard');
+      if (email.includes('customer') || email.includes('acme') || email.includes('client')) {
+        navigate('/portal');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Verify credentials or use demo presets below.');
     } finally {
@@ -33,13 +37,13 @@ export const Login: React.FC = () => {
   const handleQuickLogin = (demoRole: 'admin' | 'staff' | 'customer') => {
     if (demoRole === 'admin') {
       setEmail('admin@brightloop.com');
-      setPassword('Admin@Brightloop2026!');
+      setPassword('Admin@123');
     } else if (demoRole === 'staff') {
       setEmail('staff@brightloop.com');
-      setPassword('Staff@Brightloop2026!');
+      setPassword('Staff@123');
     } else {
       setEmail('rohit@acme-tech.com');
-      setPassword('Customer@Acme2026!');
+      setPassword('Customer@123');
     }
   };
 
@@ -145,6 +149,21 @@ export const Login: React.FC = () => {
                   >
                     🏢 Client
                   </button>
+                </div>
+
+                <div className="p-2.5 bg-[#070A11] border border-[#192233] rounded text-[11px] font-mono space-y-1 text-slate-400">
+                  <div className="flex justify-between">
+                    <span>Admin:</span>
+                    <span className="text-blue-400">admin@brightloop.com / Admin@123</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Staff:</span>
+                    <span className="text-indigo-400">staff@brightloop.com / Staff@123</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Client:</span>
+                    <span className="text-emerald-400">rohit@acme-tech.com / Customer@123</span>
+                  </div>
                 </div>
               </div>
             </CardContent>

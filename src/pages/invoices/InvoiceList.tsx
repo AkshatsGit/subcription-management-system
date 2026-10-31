@@ -29,8 +29,11 @@ export const InvoiceList: React.FC = () => {
 
   const fetchInvoices = async () => {
     let list = await dbService.getInvoices();
-    if (isCustomer && userProfile?.customerId) {
-      list = list.filter((inv) => inv.customerId === userProfile.customerId);
+    if (isCustomer) {
+      const targetId = userProfile?.customerId || 'cust_acme_corp';
+      list = list.filter(
+        (inv) => inv.customerId === targetId || inv.customerSnapshot?.email?.toLowerCase() === userProfile?.email?.toLowerCase()
+      );
     }
     setInvoices(list);
   };

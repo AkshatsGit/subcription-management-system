@@ -1,18 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../../services/db';
-import { Customer } from '../../types';
+import { Customer, Product, SubscriptionPlan } from '../../types';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { formatCurrency } from '../../utils/money';
-import { Users, Plus, Search, Mail, Phone, MapPin, Building2 } from 'lucide-react';
+import { Users, Plus, Search, Mail, Phone, MapPin, Building2, Repeat, CheckCircle2 } from 'lucide-react';
 
 export const CustomerList: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Assign Subscription Modal state
+  const [assignCustomer, setAssignCustomer] = useState<Customer | null>(null);
+  const [assignProductId, setAssignProductId] = useState('');
+  const [assignVariantId, setAssignVariantId] = useState('');
+  const [assignPlanId, setAssignPlanId] = useState('');
+  const [assignQuantity, setAssignQuantity] = useState(1);
+  const [assignTerms, setAssignTerms] = useState('Net 15 days');
 
   // Form states
   const [companyName, setCompanyName] = useState('');
@@ -27,13 +39,52 @@ export const CustomerList: React.FC = () => {
   const [taxNumber, setTaxNumber] = useState('');
 
   const fetchCustomers = async () => {
-    const list = await dbService.getCustomers();
-    setCustomers(list);
+    const [cList, pList, plList] = await Promise.all([
+      dbService.getCustomers(),
+      dbService.getProducts(),
+      dbService.getPlans(),
+    ]);
+    setCustomers(cList);
+    setProducts(pList);
+    setPlans(plList);
+    if (pList.length > 0 && !assignProductId) setAssignProductId(pList[0].id);
+    if (plList.length > 0 && !assignPlanId) setAssignPlanId(plList[0].id);
   };
 
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  const openAssignModal = (c: Customer) => {
+    setAssignCustomer(c);
+    setAssignQuantity(1);
+    setAssignTerms('Net 15 days');
+    if (products.length > 0) setAssignProductId(products[0].id);
+    if (plans.length > 0) setAssignPlanId(plans[0].id);
+  };
+
+  const handleAssignSubscription = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignCustomer || !assignProductId || !assignPlanId) return;
+
+    try {
+      const newSub = await dbService.createSubscription({
+        customerId: assignCustomer.id,
+        productId: assignProductId,
+        variantId: assignVariantId || null,
+        planId: assignPlanId,
+        quantity: assignQuantity,
+        paymentTerms: assignTerms,
+        notes: `Direct assignment to ${assignCustomer.companyName}`,
+      });
+
+      setAssignCustomer(null);
+      setSuccessMsg(`Subscription ${newSub.subscriptionNumber} created and activated for ${assignCustomer.companyName}!`);
+      fetchCustomers();
+    } catch (err: any) {
+      alert(err.message || 'Failed to assign subscription');
+    }
+  };
 
   const openCreateModal = () => {
     setCompanyName('');
@@ -91,6 +142,18 @@ export const CustomerList: React.FC = () => {
         </Button>
       </div>
 
+      {successMsg && (
+        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-300 text-sm flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span className="font-semibold">{successMsg}</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setSuccessMsg(null)} className="h-7 text-xs">
+            Dismiss
+          </Button>
+        </div>
+      )}
+
       {/* Search Bar */}
       <div className="relative w-full max-w-md">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -147,6 +210,17 @@ export const CustomerList: React.FC = () => {
                   {formatCurrency(c.outstandingBalance)}
                 </span>
               </div>
+            </div>
+
+            <div className="pt-3 mt-3 border-t border-border/60 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openAssignModal(c)}
+                className="gap-1.5 text-xs h-7 text-blue-400 hover:text-white hover:bg-blue-600/20 border-blue-500/20"
+              >
+                <Repeat className="h-3 w-3" /> Assign Subscription
+              </Button>
             </div>
           </Card>
         ))}
@@ -225,6 +299,101 @@ export const CustomerList: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Direct Assign Subscription Modal */}
+      {assignCustomer && (
+        <Modal
+          isOpen={!!assignCustomer}
+          onClose={() => setAssignCustomer(null)}
+          title={`Assign Subscription — ${assignCustomer.companyName}`}
+          description={`Provision a live software subscription and generate initial billing invoice.`}
+          maxWidth="lg"
+        >
+          <form onSubmit={handleAssignSubscription} className="space-y-4">
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs space-y-1">
+              <span className="font-semibold text-white">Target Account:</span>
+              <p className="text-slate-300">
+                {assignCustomer.companyName} ({assignCustomer.contactName} • {assignCustomer.email})
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select
+                label="Product Suite"
+                value={assignProductId}
+                onChange={(e) => {
+                  setAssignProductId(e.target.value);
+                  setAssignVariantId('');
+                }}
+                options={products.map((p) => ({
+                  label: `${p.name} (${formatCurrency(p.salesPrice)})`,
+                  value: p.id,
+                }))}
+                required
+              />
+
+              <Select
+                label="Billing Cadence & Plan"
+                value={assignPlanId}
+                onChange={(e) => setAssignPlanId(e.target.value)}
+                options={plans.map((pl) => ({
+                  label: `${pl.name} (${formatCurrency(pl.salesPrice)} / ${pl.billingFrequency})`,
+                  value: pl.id,
+                }))}
+                required
+              />
+            </div>
+
+            {/* Variant Selector */}
+            {products.find((p) => p.id === assignProductId)?.variants?.length ? (
+              <Select
+                label="Product Variant / Add-on"
+                value={assignVariantId}
+                onChange={(e) => setAssignVariantId(e.target.value)}
+              >
+                <option value="">None (Standard Base Edition)</option>
+                {products
+                  .find((p) => p.id === assignProductId)!
+                  .variants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} (+{formatCurrency(v.additionalPrice)})
+                    </option>
+                  ))}
+              </Select>
+            ) : null}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Seats / Quantity"
+                type="number"
+                min="1"
+                value={assignQuantity}
+                onChange={(e) => setAssignQuantity(parseInt(e.target.value) || 1)}
+                required
+              />
+              <Select
+                label="Payment Terms"
+                value={assignTerms}
+                onChange={(e) => setAssignTerms(e.target.value)}
+                options={[
+                  { label: 'Net 15 days', value: 'Net 15 days' },
+                  { label: 'Net 30 days', value: 'Net 30 days' },
+                  { label: 'Immediate / Due on Receipt', value: 'Immediate' },
+                ]}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-border">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAssignCustomer(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold">
+                Activate Subscription & Issue Invoice
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

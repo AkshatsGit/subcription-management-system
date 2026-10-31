@@ -60,14 +60,25 @@ const STORAGE_KEYS = {
   BILLING_JOBS: 'brightloop_billing_jobs',
 };
 
-function getLocal<T>(key: string, defaultData: T[]): T[] {
+function getLocal<T extends { id?: string }>(key: string, defaultData: T[]): T[] {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) {
       localStorage.setItem(key, JSON.stringify(defaultData));
       return defaultData;
     }
-    return JSON.parse(raw);
+    const parsed: T[] = JSON.parse(raw);
+    let changed = false;
+    for (const item of defaultData) {
+      if (item && item.id && !parsed.some((p) => p && p.id === item.id)) {
+        parsed.push(item);
+        changed = true;
+      }
+    }
+    if (changed) {
+      localStorage.setItem(key, JSON.stringify(parsed));
+    }
+    return parsed;
   } catch {
     return defaultData;
   }
@@ -481,6 +492,183 @@ class DatabaseService {
   async getSubscriptionById(id: string): Promise<Subscription | null> {
     const subs = await this.getSubscriptions();
     return subs.find((s) => s.id === id) || null;
+  }
+
+  async createSubscription(data: {
+    customerId: string;
+    productId: string;
+    variantId?: string | null;
+    planId: string;
+    quantity: number;
+    paymentTerms?: string;
+    notes?: string;
+    performedByUid?: string;
+  }): Promise<Subscription> {
+    const [customers, products, plans, subscriptions, invoices] = await Promise.all([
+      this.getCustomers(),
+      this.getProducts(),
+      this.getPlans(),
+      this.getSubscriptions(),
+      this.getInvoices(),
+    ]);
+
+    const customer = customers.find((c) => c.id === data.customerId);
+    if (!customer) throw new Error('Customer not found');
+
+    const product = products.find((p) => p.id === data.productId);
+    if (!product) throw new Error('Product not found');
+
+    const plan = plans.find((pl) => pl.id === data.planId);
+    if (!plan) throw new Error('Plan not found');
+
+    const variant = product.variants?.find((v) => v.id === data.variantId);
+    const unitPrice = plan.salesPrice + (variant ? variant.additionalPrice : 0);
+    const subtotal = unitPrice * data.quantity;
+    const taxTotal = Math.round(subtotal * 0.18);
+    const grandTotal = subtotal + taxTotal;
+
+    const subSeq = subscriptions.length + 1001;
+    const subscriptionNumber = `SUB-${new Date().getFullYear()}-${subSeq.toString().padStart(4, '0')}`;
+    const subId = `sub_${Date.now()}`;
+
+    const startDate = new Date();
+    const frequency = plan.billingFrequency || 'monthly';
+    const anchorDay = startDate.getDate();
+    const nextBilling = calculateNextBillingDate(startDate, frequency, anchorDay);
+
+    const newSub: Subscription = {
+      id: subId,
+      subscriptionNumber,
+      customerId: customer.id,
+      customerSnapshot: {
+        companyName: customer.companyName,
+        contactName: customer.contactName,
+        email: customer.email,
+        phone: customer.phone,
+        billingAddress: customer.billingAddress,
+        taxNumber: customer.taxNumber,
+      },
+      planId: plan.id,
+      planSnapshot: {
+        name: plan.name,
+        billingFrequency: frequency,
+        salesPrice: plan.salesPrice,
+        allowEarlyClosure: plan.allowEarlyClosure ?? true,
+        allowPause: plan.allowPause ?? true,
+        allowRenewal: plan.allowRenewal ?? true,
+        autoCloseOnExpiry: plan.autoCloseOnExpiry ?? false,
+      },
+      productId: product.id,
+      productName: product.name,
+      variantId: variant?.id || null,
+      variantName: variant?.name || null,
+      status: 'active',
+      quantity: data.quantity,
+      unitPrice,
+      subtotal,
+      taxRuleIds: ['tax_gst_18'],
+      taxTotal,
+      discountRuleIds: [],
+      discountTotal: 0,
+      totalAmount: grandTotal,
+      billingFrequency: frequency,
+      startDate: startDate.toISOString(),
+      nextBillingDate: nextBilling.toISOString(),
+      expiryDate: null,
+      paymentTerms: data.paymentTerms || 'Net 15 days',
+      anchorDay,
+      autoCloseOnExpiry: false,
+      allowEarlyClosure: true,
+      allowPause: true,
+      allowRenewal: true,
+      lastInvoicedDate: startDate.toISOString(),
+      history: [
+        {
+          timestamp: startDate.toISOString(),
+          fromStatus: 'draft',
+          toStatus: 'active',
+          reason: 'Direct subscription creation & activation',
+          performedBy: data.performedByUid || 'admin',
+        },
+      ],
+      createdAt: startDate.toISOString(),
+      updatedAt: startDate.toISOString(),
+    };
+
+    const invSeq = invoices.length + 1001;
+    const invNumber = `INV-${startDate.getFullYear()}-${invSeq.toString().padStart(4, '0')}`;
+    const invId = `inv_${Date.now()}`;
+    const dueDate = new Date(startDate.getTime() + 15 * 86400000);
+
+    const initialInvoice: Invoice = {
+      id: invId,
+      invoiceNumber: invNumber,
+      billingPeriodId: `BP_${subId}_${startDate.toISOString().split('T')[0]}`,
+      subscriptionId: subId,
+      subscriptionNumber,
+      customerId: customer.id,
+      customerSnapshot: newSub.customerSnapshot,
+      invoiceDate: startDate.toISOString(),
+      dueDate: dueDate.toISOString(),
+      periodStart: startDate.toISOString(),
+      periodEnd: nextBilling.toISOString(),
+      status: 'confirmed',
+      lineItems: [
+        {
+          id: `li_${Date.now()}`,
+          description: `${product.name}${variant ? ` (+${variant.name})` : ''} — ${plan.name} (${frequency})`,
+          quantity: data.quantity,
+          unitPrice,
+          subtotal,
+          taxAmount: taxTotal,
+          discountAmount: 0,
+          total: grandTotal,
+        },
+      ],
+      subtotal,
+      taxSnapshot: [
+        {
+          ruleId: 'tax_gst_18',
+          name: 'GST 18%',
+          ratePercentage: 18.0,
+          amount: taxTotal,
+        },
+      ],
+      taxTotal,
+      discountSnapshot: [],
+      discountTotal: 0,
+      grandTotal,
+      amountPaid: 0,
+      balanceDue: grandTotal,
+      paymentTerms: data.paymentTerms || 'Net 15 days',
+      notes: data.notes || 'First billing cycle activated.',
+      createdAt: startDate.toISOString(),
+      updatedAt: startDate.toISOString(),
+    };
+
+    const updatedCustomer: Customer = {
+      ...customer,
+      outstandingBalance: (customer.outstandingBalance || 0) + grandTotal,
+      totalSpent: (customer.totalSpent || 0) + grandTotal,
+      updatedAt: startDate.toISOString(),
+    };
+
+    setLocal(STORAGE_KEYS.SUBSCRIPTIONS, [newSub, ...subscriptions]);
+    setLocal(STORAGE_KEYS.INVOICES, [initialInvoice, ...invoices]);
+    const updatedCustomers = customers.map((c) => (c.id === customer.id ? updatedCustomer : c));
+    setLocal(STORAGE_KEYS.CUSTOMERS, updatedCustomers);
+
+    try {
+      await Promise.all([
+        withTimeout(setDoc(doc(db, 'subscriptions', subId), { ...newSub, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })),
+        withTimeout(setDoc(doc(db, 'invoices', invId), { ...initialInvoice, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })),
+        withTimeout(setDoc(doc(db, 'customers', customer.id), { ...updatedCustomer, updatedAt: serverTimestamp() })),
+      ]);
+    } catch {
+      // Local fallback handled
+    }
+
+    return newSub;
   }
 
   async updateSubscriptionStatus(

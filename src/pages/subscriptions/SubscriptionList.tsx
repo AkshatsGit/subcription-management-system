@@ -1,34 +1,97 @@
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../../services/db';
-import { Subscription, SubscriptionStatus } from '../../types';
+import { Subscription, SubscriptionStatus, Customer, Product, SubscriptionPlan } from '../../types';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
 import { formatCurrency } from '../../utils/money';
 import { canTransitionSubscription } from '../../utils/status';
-import { Repeat, Play, Pause, XCircle, RotateCcw, Clock, History, AlertCircle } from 'lucide-react';
+import { Repeat, Play, Pause, XCircle, RotateCcw, Clock, History, AlertCircle, Plus, CheckCircle2, Building2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const SubscriptionList: React.FC = () => {
-  const { userProfile } = useAuth();
+  const { userProfile, isCustomer } = useAuth();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
   const [isTransitionModalOpen, setIsTransitionModalOpen] = useState(false);
   const [targetStatus, setTargetStatus] = useState<SubscriptionStatus>('active');
   const [transitionReason, setTransitionReason] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [historySub, setHistorySub] = useState<Subscription | null>(null);
 
+  // Direct Subscription Creation State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedVariantId, setSelectedVariantId] = useState('');
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [paymentTerms, setPaymentTerms] = useState('Net 15 days');
+  const [notes, setNotes] = useState('New corporate entitlement.');
+
   const fetchSubscriptions = async () => {
-    const list = await dbService.getSubscriptions();
-    setSubscriptions(list);
+    const [subList, custList, prodList, planList] = await Promise.all([
+      dbService.getSubscriptions(),
+      dbService.getCustomers(),
+      dbService.getProducts(),
+      dbService.getPlans(),
+    ]);
+
+    let displayedSubs = subList;
+    if (isCustomer) {
+      const targetId = userProfile?.customerId || 'cust_acme_corp';
+      displayedSubs = subList.filter(
+        (s) => s.customerId === targetId || s.customerSnapshot?.email?.toLowerCase() === userProfile?.email?.toLowerCase()
+      );
+    }
+
+    setSubscriptions(displayedSubs);
+    setCustomers(custList);
+    setProducts(prodList);
+    setPlans(planList);
+
+    if (custList.length > 0 && !selectedCustomerId) setSelectedCustomerId(custList[0].id);
+    if (prodList.length > 0 && !selectedProductId) setSelectedProductId(prodList[0].id);
+    if (planList.length > 0 && !selectedPlanId) setSelectedPlanId(planList[0].id);
   };
 
   useEffect(() => {
     fetchSubscriptions();
-  }, []);
+  }, [isCustomer, userProfile]);
+
+  const handleCreateSubscription = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCustomerId || !selectedProductId || !selectedPlanId) {
+      setErrorMsg('Please select customer, product, and subscription plan.');
+      return;
+    }
+
+    try {
+      const newSub = await dbService.createSubscription({
+        customerId: selectedCustomerId,
+        productId: selectedProductId,
+        variantId: selectedVariantId || null,
+        planId: selectedPlanId,
+        quantity,
+        paymentTerms,
+        notes,
+        performedByUid: userProfile?.displayName || 'Admin',
+      });
+
+      setIsCreateModalOpen(false);
+      setSuccessMsg(`Subscription ${newSub.subscriptionNumber} successfully activated for ${newSub.customerSnapshot.companyName}!`);
+      fetchSubscriptions();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to create subscription.');
+    }
+  };
 
   const openTransitionModal = (sub: Subscription, status: SubscriptionStatus) => {
     setSelectedSub(sub);
@@ -74,7 +137,36 @@ export const SubscriptionList: React.FC = () => {
             Finite state machine: Draft → Quotation → Confirmed → Active → Closed (plus Paused). Full audit logs.
           </p>
         </div>
+        {!isCustomer && (
+          <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-500 text-white">
+            <Plus className="h-4 w-4" /> Create Subscription
+          </Button>
+        )}
       </div>
+
+      {successMsg && (
+        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-300 text-sm flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span className="font-semibold">{successMsg}</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setSuccessMsg(null)} className="h-7 text-xs">
+            Dismiss
+          </Button>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-800 dark:text-rose-300 text-sm flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
+            <span className="font-semibold">{errorMsg}</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setErrorMsg(null)} className="h-7 text-xs">
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       {/* Subscriptions Grid */}
       <div className="grid grid-cols-1 gap-4">
@@ -265,6 +357,110 @@ export const SubscriptionList: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Direct Create Subscription Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Create & Activate Subscription"
+        description="Assign a recurring software subscription and generate initial billing invoice."
+        maxWidth="xl"
+      >
+        <form onSubmit={handleCreateSubscription} className="space-y-4">
+          <Select
+            label="Customer Account"
+            value={selectedCustomerId}
+            onChange={(e) => setSelectedCustomerId(e.target.value)}
+            options={customers.map((c) => ({
+              label: `${c.companyName} (${c.contactName || c.email})`,
+              value: c.id,
+            }))}
+            required
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Product Suite"
+              value={selectedProductId}
+              onChange={(e) => {
+                setSelectedProductId(e.target.value);
+                setSelectedVariantId('');
+              }}
+              options={products.map((p) => ({
+                label: `${p.name} (${formatCurrency(p.salesPrice)})`,
+                value: p.id,
+              }))}
+              required
+            />
+
+            <Select
+              label="Billing Cadence & Plan"
+              value={selectedPlanId}
+              onChange={(e) => setSelectedPlanId(e.target.value)}
+              options={plans.map((pl) => ({
+                label: `${pl.name} (${formatCurrency(pl.salesPrice)} / ${pl.billingFrequency})`,
+                value: pl.id,
+              }))}
+              required
+            />
+          </div>
+
+          {/* Variant Selector */}
+          {products.find((p) => p.id === selectedProductId)?.variants?.length ? (
+            <Select
+              label="Product Variant / Add-on"
+              value={selectedVariantId}
+              onChange={(e) => setSelectedVariantId(e.target.value)}
+            >
+              <option value="">None (Standard Base Edition)</option>
+              {products
+                .find((p) => p.id === selectedProductId)!
+                .variants.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} (+{formatCurrency(v.additionalPrice)})
+                  </option>
+                ))}
+            </Select>
+          ) : null}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Seats / Quantity"
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+              required
+            />
+            <Select
+              label="Payment Terms"
+              value={paymentTerms}
+              onChange={(e) => setPaymentTerms(e.target.value)}
+              options={[
+                { label: 'Net 15 days', value: 'Net 15 days' },
+                { label: 'Net 30 days', value: 'Net 30 days' },
+                { label: 'Immediate / Due on Receipt', value: 'Immediate' },
+              ]}
+            />
+          </div>
+
+          <Input
+            label="Internal Contract Notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Contract notes, SLA tier, etc."
+          />
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-border">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIsCreateModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold">
+              Activate Subscription & Issue Invoice
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
