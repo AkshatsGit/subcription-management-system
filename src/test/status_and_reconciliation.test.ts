@@ -43,3 +43,4 @@ describe('State Machines & Transition Guards', () => {
     expect(canTransitionInvoice('paid', 'draft').allowed).toBe(false);
   });
 });
+

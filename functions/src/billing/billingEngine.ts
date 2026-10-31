@@ -54,3 +54,4 @@ export function generateBillingPeriodId(subscriptionId: string, billingDate: Dat
   const dateObj = typeof billingDate === 'string' ? parseISO(billingDate) : billingDate;
   return `BP_${subscriptionId}_${format(dateObj, 'yyyy-MM-dd')}`;
 }
+

@@ -228,3 +228,4 @@ export const CustomerList: React.FC = () => {
     </div>
   );
 };
+

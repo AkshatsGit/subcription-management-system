@@ -634,3 +634,4 @@ export const SEED_PAYMENTS: Payment[] = [
     createdAt: '2026-10-05T14:20:00Z',
   },
 ];
+

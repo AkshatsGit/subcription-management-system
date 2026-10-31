@@ -328,3 +328,4 @@ export const ProductList: React.FC = () => {
     </div>
   );
 };
+

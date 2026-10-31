@@ -511,3 +511,4 @@ Developed with architectural rigor by:
 
 ### **Team Ripple**
 *Software Architecture • Full-Stack Engineering • Security & Database Design*
+

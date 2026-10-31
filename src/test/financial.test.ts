@@ -90,3 +90,4 @@ describe('Financial Precision & Multi-Component Calculations', () => {
     expect(calc.discountTotal).toBe(200000); // 20% of ₹10,000 = ₹2,000
   });
 });
+

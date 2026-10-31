@@ -58,3 +58,4 @@ export function calculatePercentageAmount(baseMinorUnits: number, percentageRate
   if (!baseMinorUnits || !percentageRate || percentageRate <= 0) return 0;
   return Math.round((baseMinorUnits * percentageRate) / 100);
 }
+

@@ -8,13 +8,13 @@ import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDummyApiKeyForProductionOrEmulator',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'brightloop-subs.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'brightloop-subs',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'brightloop-subs.appspot.com',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '123456789012',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:123456789012:web:abcdef1234567890',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-ABCDEF1234',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDq5iMk3G1pnV1pTgOU5Bhq61WaoD_DV3s',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'brightloop-7abbb.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'brightloop-7abbb',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'brightloop-7abbb.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '626741264896',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:626741264896:web:31220c814dbb357f55cee5',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-RSJM6GQH12',
 };
 
 // Initialize Firebase App singleton
@@ -42,3 +42,4 @@ if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
     console.warn('[Firebase] Emulator connection warning:', err);
   }
 }
+

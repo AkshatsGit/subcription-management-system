@@ -64,3 +64,4 @@ export interface DiscountRuleRecord {
   applicableSubscriptionIds: string[];
   isActive: boolean;
 }
+

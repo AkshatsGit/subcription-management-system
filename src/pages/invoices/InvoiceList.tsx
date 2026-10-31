@@ -404,3 +404,4 @@ export const InvoiceList: React.FC = () => {
     </div>
   );
 };
+

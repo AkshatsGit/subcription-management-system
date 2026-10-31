@@ -214,3 +214,4 @@ export const DiscountList: React.FC = () => {
     </div>
   );
 };
+
